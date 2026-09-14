@@ -7,11 +7,12 @@
   <title>厂域镜像 · 拓扑生成靶场</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='13' fill='%230b1118'/%3E%3Cpath d='M14 42V22h12v8h12v-8h12v20H14Z' fill='none' stroke='%2335d6b2' stroke-width='4'/%3E%3Ccircle cx='20' cy='36' r='2.5' fill='%23ffb15a'/%3E%3Ccircle cx='44' cy='36' r='2.5' fill='%23ffb15a'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./upgrade.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand"><span class="brand-mark">FT</span><div><strong>厂域镜像</strong><small>FactoryTwin Lab</small></div></div>
-    <div class="run-state"><span class="pulse"></span><span id="runState">样例环境已就绪</span></div>
+    <div class="run-state"><span class="pulse"></span><span id="runState">钟山水厂拓扑已识别</span></div>
     <button class="ghost" id="exportJson">导出拓扑模型</button>
   </header>
 
@@ -27,38 +28,42 @@
     <section class="workspace">
       <div class="canvas-shell">
         <div class="panel-head">
-          <div><h1>拓扑识别工作台</h1><p id="sourceHint">工业控制网络样例 · 7 个节点 · 7 条链路</p></div>
+          <div><h1>可操作设备拓扑</h1><p id="sourceHint">钟山水厂网络拓扑图 · 识别结果已生成</p></div>
           <div class="toolbar">
             <label class="button secondary" for="fileInput">上传拓扑图</label>
             <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden />
-            <button class="button secondary" id="loadSample">载入样例</button>
-            <button class="button primary" id="analyzeBtn">开始识别</button>
+            <button class="button secondary" id="showOriginal">原图对照</button>
+            <button class="button secondary" id="loadSample">识别钟山水厂</button>
+            <button class="button primary" id="analyzeBtn">生成设备拓扑</button>
           </div>
         </div>
         <div class="canvas-wrap" id="canvasWrap">
-          <img id="uploadedImage" alt="用户上传的网络拓扑图" />
-          <svg id="topologyCanvas" viewBox="0 0 980 560" role="img" aria-label="可编辑网络拓扑"></svg>
+          <img id="uploadedImage" src="./assets/zhongshan-water-plant.jpg" alt="钟山水厂原始网络拓扑图" />
+          <svg id="topologyCanvas" viewBox="0 0 1400 820" role="img" aria-label="可拖拽编辑的钟山水厂网络拓扑"></svg>
+          <div class="zoom-tools"><button id="zoomOut" aria-label="缩小">−</button><button id="fitView">适应画布</button><button id="zoomIn" aria-label="放大">＋</button></div>
           <div class="canvas-legend">
             <span><i class="dot enterprise"></i>企业区</span>
-            <span><i class="dot dmz"></i>工业 DMZ</span>
-            <span><i class="dot control"></i>控制区</span>
-            <span><i class="dot field"></i>现场区</span>
+            <span><i class="dot dmz"></i>集团边界</span>
+            <span><i class="dot security"></i>安防网</span>
+            <span><i class="dot control"></i>泵房区</span>
+            <span><i class="dot field"></i>生产工控网</span>
           </div>
           <div class="scanline" id="scanline"></div>
         </div>
       </div>
 
       <aside class="inspector">
-        <div class="panel-head compact"><div><h2>节点属性</h2><p>修改后立即同步拓扑模型</p></div><span class="confidence" id="confidence">96%</span></div>
+        <div class="panel-head compact"><div><h2>设备属性</h2><p>点击或拖动拓扑中的设备</p></div><span class="confidence" id="confidence">96%</span></div>
         <form id="nodeForm">
           <label>设备名称<input id="nodeName" autocomplete="off" /></label>
-          <label>设备类型<select id="nodeType"><option value="firewall">工业防火墙</option><option value="switch">交换机</option><option value="server">服务器</option><option value="workstation">工程师站</option><option value="hmi">HMI</option><option value="plc">PLC</option><option value="sensor">现场设备</option></select></label>
+          <label>设备类型<select id="nodeType"><option value="internet">互联网</option><option value="firewall">工业防火墙</option><option value="router">路由/行为管理</option><option value="switch">交换机</option><option value="server">服务器</option><option value="workstation">工作站</option><option value="hmi">HMI</option><option value="plc">PLC</option><option value="camera">摄像机</option><option value="security">安防终端</option><option value="display">显示终端</option><option value="sensor">现场设备</option></select></label>
           <label>IP 地址<input id="nodeIp" inputmode="decimal" /></label>
-          <label>安全区域<select id="nodeZone"><option value="enterprise">企业区</option><option value="dmz">工业 DMZ</option><option value="control">控制区</option><option value="field">现场区</option></select></label>
-          <label>运行模板<select id="nodeProfile"><option value="linux-host">Linux 主机</option><option value="generic-firewall">通用防火墙</option><option value="l2-switch">二层交换机</option><option value="modbus-plc">Modbus PLC</option><option value="hmi-web">Web HMI</option><option value="field-simulator">现场过程模拟器</option></select></label>
+          <label>安全区域<select id="nodeZone"><option value="enterprise">办公网</option><option value="dmz">集团/边界区</option><option value="security">安防网</option><option value="control">工业控制网</option><option value="field">现场控制区</option></select></label>
+          <label>运行模板<select id="nodeProfile"><option value="linux-host">Linux 主机</option><option value="generic-firewall">通用防火墙</option><option value="frr-router">可配置路由器</option><option value="l2-switch">二层交换机</option><option value="modbus-plc">Modbus PLC</option><option value="profinet-plc">Profinet PLC</option><option value="hmi-web">Web HMI</option><option value="camera-rtsp">RTSP 摄像机</option><option value="field-simulator">现场过程模拟器</option></select></label>
         </form>
         <div class="finding"><span>识别依据</span><p id="findingText">图标特征 + 邻近文本 + 连线位置</p></div>
-        <button class="button full secondary" id="addNode">＋ 添加缺失设备</button>
+        <div class="node-actions"><button class="button secondary" id="addNode">＋ 添加设备</button><button class="button secondary" id="linkNode">连接设备</button><button class="button danger" id="deleteNode">删除</button></div>
+        <div class="recognition-summary"><strong>识别摘要</strong><div id="typeSummary"></div></div>
       </aside>
     </section>
 
@@ -67,10 +72,10 @@
         <span class="eyebrow">DEPLOYMENT BLUEPRINT</span>
         <h2>生成隔离的真实网络环境</h2>
         <p>将确认后的节点和链路编译为 Containerlab 配置，在 Linux 网络命名空间之间创建真实 veth 链路。</p>
-        <div class="stats"><div><strong id="nodeCount">7</strong><span>节点</span></div><div><strong id="linkCount">7</strong><span>链路</span></div><div><strong>4</strong><span>安全区域</span></div><div><strong id="issueCount">1</strong><span>待确认</span></div></div>
+        <div class="stats"><div><strong id="nodeCount">0</strong><span>设备</span></div><div><strong id="linkCount">0</strong><span>链路</span></div><div><strong id="zoneCount">5</strong><span>安全区域</span></div><div><strong id="issueCount">0</strong><span>待确认</span></div></div>
       </div>
       <div class="deploy-actions">
-        <label>目标编排器<select id="orchestrator"><option value="containerlab">Containerlab</option><option value="json">通用拓扑 JSON</option></select></label>
+        <label>目标编排器<select id="orchestrator"><option value="containerlab">Containerlab + 设备模板</option><option value="json">通用拓扑 JSON</option></select></label>
         <button class="button primary large" id="generateBtn">生成部署配置</button>
         <button class="button secondary large" id="downloadBtn" disabled>下载部署文件</button>
       </div>
@@ -84,6 +89,6 @@
   </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./app.js"></script>
+  <script src="./waterplant.js"></script>
 </body>
 </html>
