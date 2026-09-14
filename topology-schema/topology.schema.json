@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://factory-range.local/schemas/topology.schema.json",
+  "title": "Industrial topology intermediate representation",
+  "type": "object",
+  "required": ["name", "zones", "nodes", "links"],
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "title": { "type": "string" },
+    "schema_version": { "type": "string", "default": "0.3" },
+    "version": { "type": "string" },
+    "source": {
+      "type": "object",
+      "properties": {
+        "kind": { "enum": ["image", "pdf", "editor", "import"] },
+        "filename": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "page": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "isolation": {
+      "type": "object",
+      "properties": {
+        "production_bridge": { "type": "boolean", "default": false },
+        "internet_egress": { "type": "boolean", "default": false }
+      },
+      "additionalProperties": false
+    },
+    "zones": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/zone" }
+    },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "links": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/link" }
+    },
+    "review": {
+      "type": "object",
+      "properties": {
+        "status": { "enum": ["unreviewed", "in_review", "approved", "rejected"] },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "point": {
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "bbox": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "minimum": 0 },
+        "height": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": { "enum": ["ocr", "detector", "line_cv", "vlm", "rule", "human", "import"] }
+        },
+        "text": { "type": "string" },
+        "notes": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "zone": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "level": { "type": ["string", "integer"] },
+        "bbox": { "$ref": "#/$defs/bbox" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      },
+      "additionalProperties": true
+    },
+    "runtime": {
+      "type": "object",
+      "properties": {
+        "mode": { "enum": ["container", "namespace", "vm", "physical", "placeholder"] },
+        "template": { "type": "string" },
+        "resource_id": { "type": "string" },
+        "image": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "name", "type", "zone"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "type": {
+          "enum": ["internet", "firewall", "router", "switch", "industrial_switch", "server", "workstation", "hmi", "scada", "historian", "opc_server", "plc", "rtu", "dcs", "sis", "camera", "security", "display", "sensor", "actuator", "drive", "robot", "io", "unknown"]
+        },
+        "vendor": { "type": "string" },
+        "model": { "type": "string" },
+        "ip": { "type": "string" },
+        "zone": { "type": "string", "minLength": 1 },
+        "profile": { "type": "string" },
+        "position": { "$ref": "#/$defs/point" },
+        "bbox": { "$ref": "#/$defs/bbox" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence": { "$ref": "#/$defs/evidence" },
+        "runtime": { "$ref": "#/$defs/runtime" },
+        "attributes": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "link": {
+      "type": "object",
+      "required": ["id", "source", "target"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 },
+        "source_interface": { "type": "string" },
+        "target_interface": { "type": "string" },
+        "protocol": { "type": "string" },
+        "medium": { "enum": ["ethernet", "fiber", "serial", "wireless", "fieldbus", "logical", "unknown"] },
+        "directed": { "type": "boolean", "default": false },
+        "path": { "type": "array", "items": { "$ref": "#/$defs/point" } },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence": { "$ref": "#/$defs/evidence" },
+        "attributes": { "type": "object" }
+      },
+      "additionalProperties": true
+    }
+  }
+}
