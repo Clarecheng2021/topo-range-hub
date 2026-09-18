@@ -4,7 +4,7 @@ const typeLabels={internet:'互联网',firewall:'防火墙',router:'路由/行�
 const typeIcons={internet:'NET',firewall:'FW',router:'RTR',switch:'SW',server:'SRV',workstation:'PC',hmi:'HMI',plc:'PLC',camera:'CAM',security:'SEC',display:'LCD',sensor:'I/O'};
 const zoneColors={enterprise:'#5aa9ff',dmz:'#ffb15a',security:'#ff6b8a',control:'#9c7cff',field:'#35d6b2'};
 const profiles={internet:'linux-host',firewall:'generic-firewall',router:'frr-router',switch:'l2-switch',server:'linux-host',workstation:'linux-host',hmi:'hmi-web',plc:'profinet-plc',camera:'camera-rtsp',security:'linux-host',display:'linux-host',sensor:'field-simulator'};
-const zoneDefs=[
+let zoneDefs=[
  {id:'enterprise',name:'钟山水厂办公网',x:20,y:35,w:520,h:260},
  {id:'dmz',name:'集团接入与控制边界',x:560,y:35,w:350,h:260},
  {id:'control',name:'泵房 / 活性炭间',x:930,y:35,w:440,h:260},
@@ -72,6 +72,7 @@ const waterPlantLinks=[
 ];
 
 let nodes=structuredClone(waterPlantNodes),links=structuredClone(waterPlantLinks),selectedId='industrial-fw',generated='',linkMode=false,linkSource=null,dragging=null,dragMoved=false;
+let linkTarget=null;
 let currentView={x:0,y:0,w:1400,h:820};
 
 function svgEl(tag,attrs={}){const el=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));return el}
@@ -81,43 +82,98 @@ function nodeCenter(n){return{x:n.x+55,y:n.y+24}}
 function applyView(){ $('topologyCanvas').setAttribute('viewBox',`${currentView.x} ${currentView.y} ${currentView.w} ${currentView.h}`) }
 
 function render(){
+ updateConnectionUI();
+ const legend=$('zoneLegend');legend.hidden=!zoneDefs.length;legend.replaceChildren(...zoneDefs.map(z=>{const entry=document.createElement('span');const dot=document.createElement('i');dot.className='dot';dot.style.background=zoneColors[z.id]||'#35d6b2';entry.append(dot,document.createTextNode(z.name));return entry}));
  const svg=$('topologyCanvas');svg.innerHTML='';applyView();
  zoneDefs.forEach(z=>{const r=svgEl('rect',{x:z.x,y:z.y,width:z.w,height:z.h,fill:zoneColors[z.id]+'0A',stroke:zoneColors[z.id]+'66',class:'zone-bg'});svg.append(r);const t=svgEl('text',{x:z.x+14,y:z.y+24,fill:zoneColors[z.id],class:'zone-title'});t.textContent=z.name;svg.append(t)});
  links.forEach(l=>{const a=nodes.find(n=>n.id===l[0]),b=nodes.find(n=>n.id===l[1]);if(!a||!b)return;const ac=nodeCenter(a),bc=nodeCenter(b),mx=(ac.x+bc.x)/2;const p=svgEl('path',{d:`M ${ac.x} ${ac.y} C ${mx} ${ac.y}, ${mx} ${bc.y}, ${bc.x} ${bc.y}`,class:'link '+(a.id===selectedId||b.id===selectedId?'active':'')});svg.append(p);if(l[2]&&Math.hypot(ac.x-bc.x,ac.y-bc.y)>150){const t=svgEl('text',{x:mx+4,y:(ac.y+bc.y)/2-5,class:'link-label'});t.textContent=l[2];svg.append(t)}});
  nodes.forEach(n=>{const g=svgEl('g',{class:`node ${n.id===selectedId?'selected':''} ${n.id===linkSource?'link-source':''}`,transform:`translate(${n.x} ${n.y})`,'data-id':n.id,tabindex:'0',role:'button','aria-label':`${n.name} ${n.ip}`});const rect=svgEl('rect',{width:110,height:48,rx:8,fill:'#101f2a',stroke:zoneColors[n.zone]});const icon=svgEl('text',{x:10,y:20,class:'node-icon'});icon.textContent=typeIcons[n.type];const title=svgEl('text',{x:39,y:19,class:'node-title'});title.textContent=clipped(n.name);const meta=svgEl('text',{x:39,y:35,class:'node-meta'});meta.textContent=n.ip||'待分配 IP';const dot=svgEl('circle',{cx:102,cy:8,r:3,class:`confidence-ring ${n.confidence<.85?'low':''}`});g.append(rect,icon,title,meta,dot);g.addEventListener('pointerdown',e=>startDrag(e,n.id));g.addEventListener('click',e=>handleNodeClick(e,n.id));g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();handleNodeClick(e,n.id)}});svg.append(g)});
- $('nodeCount').textContent=nodes.length;$('linkCount').textContent=links.length;$('zoneCount').textContent=new Set(nodes.map(n=>n.zone)).size;$('issueCount').textContent=nodes.filter(n=>n.confidence<.85).length;renderSummary();
+ svg.querySelectorAll('.node').forEach(g=>g.classList.toggle('link-target',linkMode&&g.getAttribute('data-id')===linkTarget));
+ $('nodeCount').textContent=nodes.length;$('linkCount').textContent=links.length;$('zoneCount').textContent=zoneDefs.length;$('issueCount').textContent=nodes.filter(n=>n.confidence<.85).length;renderSummary();
+ window.onTopologyChanged?.();
 }
 
 function renderSummary(){const counts={};nodes.forEach(n=>counts[n.type]=(counts[n.type]||0)+1);$('typeSummary').innerHTML=Object.entries(counts).map(([k,v])=>`<span>${typeLabels[k]} ${v}</span>`).join('')}
 function selectNode(id){selectedId=id;const n=nodes.find(x=>x.id===id);if(!n)return;$('nodeName').value=n.name;$('nodeType').value=n.type;$('nodeIp').value=n.ip;$('nodeZone').value=n.zone;$('nodeProfile').value=n.profile;$('confidence').textContent=Math.round(n.confidence*100)+'%';$('findingText').textContent=n.confidence<.85?'文字或设备型号不完全清晰，已按区域位置和相邻设备推断，请人工确认':'设备图标、中文标签、所属区域和线路走向联合识别';render()}
 function syncForm(){const n=nodes.find(x=>x.id===selectedId);if(!n)return;n.name=$('nodeName').value;n.type=$('nodeType').value;n.ip=$('nodeIp').value;n.zone=$('nodeZone').value;n.profile=$('nodeProfile').value;n.confidence=1;render()}
 function canvasPoint(e){const r=$('topologyCanvas').getBoundingClientRect();return{x:currentView.x+(e.clientX-r.left)*currentView.w/r.width,y:currentView.y+(e.clientY-r.top)*currentView.h/r.height}}
-function startDrag(e,id){if(linkMode)return;const n=nodes.find(x=>x.id===id),p=canvasPoint(e);dragging={id,dx:p.x-n.x,dy:p.y-n.y};dragMoved=false;selectedId=id;e.preventDefault()}
-window.addEventListener('pointermove',e=>{if(!dragging)return;const n=nodes.find(x=>x.id===dragging.id),p=canvasPoint(e);if(!n)return;n.x=Math.max(5,Math.min(1285,p.x-dragging.dx));n.y=Math.max(5,Math.min(767,p.y-dragging.dy));dragMoved=true;render()});
+function startDrag(e,id){if(linkMode)return;const n=nodes.find(x=>x.id===id),p=canvasPoint(e);dragging={id,dx:p.x-n.x,dy:p.y-n.y,startX:e.clientX,startY:e.clientY};dragMoved=false;selectedId=id;e.preventDefault()}
+window.addEventListener('pointermove',e=>{if(!dragging)return;if(!dragMoved&&Math.hypot(e.clientX-dragging.startX,e.clientY-dragging.startY)<5)return;const n=nodes.find(x=>x.id===dragging.id),p=canvasPoint(e);if(!n)return;n.x=Math.max(5,Math.min(1285,p.x-dragging.dx));n.y=Math.max(5,Math.min(767,p.y-dragging.dy));dragMoved=true;render()});
 window.addEventListener('pointerup',()=>{dragging=null});
-function handleNodeClick(e,id){if(dragMoved){dragMoved=false;selectNode(id);return}if(!linkMode){selectNode(id);return}if(!linkSource){linkSource=id;toast('请选择要连接的第二台设备');render();return}if(linkSource===id){linkSource=null;toast('已取消连接');render();return}const exists=links.some(l=>(l[0]===linkSource&&l[1]===id)||(l[1]===linkSource&&l[0]===id));if(!exists)links.push([linkSource,id,'手工链路']);linkSource=null;linkMode=false;$('linkNode').textContent='连接设备';selectNode(id);toast(exists?'这两台设备已经连接':'链路已创建')}
+function connectionIssue(){
+ if(!nodes.some(n=>n.id===linkSource))return '请选择起点设备';
+ if(!nodes.some(n=>n.id===linkTarget))return '请选择终点设备';
+ if(linkSource===linkTarget)return '起点和终点不能是同一台设备';
+ if(links.some(l=>(l[0]===linkSource&&l[1]===linkTarget)||(l[1]===linkSource&&l[0]===linkTarget)))return '这两台设备已存在连接，请选择其他设备';
+ return '';
+}
+function updateConnectionUI(){
+ if(linkMode&&((linkSource&&!nodes.some(n=>n.id===linkSource))||(linkTarget&&!nodes.some(n=>n.id===linkTarget)))){linkMode=false;linkSource=null;linkTarget=null}
+ $('connectionPanel').hidden=!linkMode;
+ $('linkNode').textContent=linkMode?'取消连接':'连接设备';
+ $('linkNode').setAttribute('aria-pressed',String(linkMode));
+ $('linkNode').disabled=nodes.length<2;
+ $('canvasWrap').classList.toggle('connecting',linkMode);
+ if(!linkMode)return;
+ for(const [field,value] of [['connectionSource',linkSource],['connectionTarget',linkTarget]]){
+  const select=$(field);const blank=document.createElement('option');blank.value='';blank.textContent='请选择设备';
+  select.replaceChildren(blank,...nodes.map(n=>{const option=document.createElement('option');option.value=n.id;option.textContent=n.name;return option}));select.value=value||'';
+ }
+ const issue=connectionIssue();$('confirmConnection').disabled=Boolean(issue);
+ $('connectionHint').textContent=issue||`${nodes.find(n=>n.id===linkSource).name} → ${nodes.find(n=>n.id===linkTarget).name}，点击“确认连接”创建链路`;
+}
+function beginConnection(){
+ if(nodes.length<2){toast('至少需要两台设备才能连接');return}
+ linkMode=true;linkSource=nodes.some(n=>n.id===selectedId)?selectedId:null;linkTarget=null;dragging=null;dragMoved=false;render();
+ toast(linkSource?'已将当前设备设为起点，请选择终点':'请选择起点和终点设备');
+}
+function cancelConnection(){linkMode=false;linkSource=null;linkTarget=null;dragMoved=false;render()}
+function confirmConnection(){
+ const issue=connectionIssue();if(!linkMode||issue){if(issue)toast(issue);return}
+ const source=linkSource,target=linkTarget;
+ links.push([source,target,'ethernet']);generated='';$('outputPanel').hidden=true;$('downloadBtn').disabled=true;
+ cancelConnection();selectNode(target);toast('链路已创建');
+}
+function handleNodeClick(e,id){
+ if(linkMode){if(!linkSource)linkSource=id;else linkTarget=id;dragMoved=false;render();return}
+ if(dragMoved){dragMoved=false;selectNode(id);return}selectNode(id);
+}
 
 function loadWaterPlant(showToast=true){nodes=structuredClone(waterPlantNodes);links=structuredClone(waterPlantLinks);selectedId='industrial-fw';linkMode=false;linkSource=null;currentView={x:0,y:0,w:1400,h:820};$('uploadedImage').src='./assets/zhongshan-water-plant.jpg';$('uploadedImage').style.display='block';$('uploadedImage').classList.remove('original');$('sourceHint').textContent=`钟山水厂网络拓扑图 · ${nodes.length} 台设备 · ${links.length} 条链路`;$('runState').textContent='钟山水厂拓扑已识别';selectNode(selectedId);if(showToast)toast('已生成钟山水厂可操作设备拓扑')}
 function toast(msg){const el=$('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2600)}
-function topologyIR(){return{name:'zhongshan-water-plant',title:'钟山水厂网络拓扑',version:'0.2',isolation:{production_bridge:false,internet_egress:false},zones:zoneDefs.map(({x,y,w,h,...z})=>z),nodes:nodes.map(n=>({...n,position:{x:n.x,y:n.y}})),links:links.map((l,i)=>({id:`link-${i+1}`,source:l[0],target:l[1],protocol:l[2]||'ethernet'}))}}
+function topologyIR(){return{name:'toporangehub-topology',title:'TopoRangeHub 可编辑矢量拓扑',version:'0.3',source:{kind:'canvas',image_size:{width:1320,height:760}},isolation:{production_bridge:false,internet_egress:false},zones:zoneDefs.map(({x,y,w,h,...z})=>({...z,bbox:{x,y,width:w,height:h}})),nodes:nodes.map(n=>({...n,position:{x:n.x,y:n.y}})),links:links.map((l,i)=>({id:`link-${i+1}`,source:l[0],target:l[1],protocol:l[2]||'ethernet'}))}}
 function safeId(s){return String(s).replace(/[^a-zA-Z0-9_-]/g,'-').toLowerCase()}
-function makeYaml(){const ports={};const lines=['name: zhongshan-water-plant','','mgmt:','  network: zhongshan-water-plant-mgmt','  ipv4-subnet: 172.31.100.0/24','','topology:','  nodes:'];nodes.forEach(n=>lines.push(`    ${safeId(n.id)}:`,'      kind: linux','      image: alpine:3.20','      cmd: sleep infinity','      labels:',`        factory.name: "${n.name.replace(/"/g,'')}"`,`        factory.type: "${n.type}"`,`        factory.zone: "${n.zone}"`,`        factory.profile: "${n.profile}"`));lines.push('  links:');links.forEach(l=>{ports[l[0]]=(ports[l[0]]||0)+1;ports[l[1]]=(ports[l[1]]||0)+1;lines.push(`    - endpoints: ["${safeId(l[0])}:eth${ports[l[0]]}", "${safeId(l[1])}:eth${ports[l[1]]}"]`)});return lines.join('\n')+'\n'}
+function makeYaml(){const ports={};const lines=['name: toporangehub-range','','mgmt:','  network: toporangehub-mgmt','  ipv4-subnet: 172.31.100.0/24','','topology:','  nodes:'];nodes.forEach(n=>lines.push(`    ${safeId(n.id)}:`,'      kind: linux','      image: alpine:3.20','      cmd: sleep infinity','      labels:',`        factory.name: "${n.name.replace(/"/g,'')}"`,`        factory.type: "${n.type}"`,`        factory.zone: "${n.zone}"`,`        factory.profile: "${n.profile}"`));lines.push('  links:');links.forEach(l=>{ports[l[0]]=(ports[l[0]]||0)+1;ports[l[1]]=(ports[l[1]]||0)+1;lines.push(`    - endpoints: ["${safeId(l[0])}:eth${ports[l[0]]}", "${safeId(l[1])}:eth${ports[l[1]]}"]`)});return lines.join('\n')+'\n'}
 function generate(){generated=$('orchestrator').value==='containerlab'?makeYaml():JSON.stringify(topologyIR(),null,2);$('outputCode').textContent=generated;$('outputPanel').hidden=false;$('downloadBtn').disabled=false;document.querySelectorAll('.workflow-step')[2].classList.add('active');$('runState').textContent='部署配置已通过完整性检查';$('outputPanel').scrollIntoView({behavior:'smooth',block:'start'});toast(`已编译 ${nodes.length} 台设备和 ${links.length} 条链路`)}
 function download(content,name,type='text/plain'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
 
 function recognizeFile(file){const img=new Image();img.onload=()=>{const aspect=img.width/img.height;setTimeout(()=>{if(aspect>1.25&&aspect<1.65){nodes=structuredClone(waterPlantNodes);links=structuredClone(waterPlantLinks);nodes.forEach(n=>n.confidence=Math.max(.76,n.confidence-.04));selectedId='industrial-fw';$('sourceHint').textContent=`${file.name} · 识别出 ${nodes.length} 台设备 · ${links.length} 条链路`;$('runState').textContent='复杂工控拓扑识别完成';selectNode(selectedId);toast('已匹配多区域水厂工控拓扑，请校对橙色节点')}else{toast('图片版式不匹配当前水厂识别模板，请补充 OCR/视觉识别服务')}} ,1400)};img.src=URL.createObjectURL(file)}
 
-$('fileInput').addEventListener('change',e=>{const file=e.target.files[0];if(!file)return;const url=URL.createObjectURL(file);$('uploadedImage').src=url;$('uploadedImage').style.display='block';$('uploadedImage').classList.remove('original');$('sourceHint').textContent=`${file.name} · ${(file.size/1024).toFixed(0)} KB`;$('runState').textContent='图片已载入，等待生成';$('analyzeBtn').onclick=()=>{$('scanline').classList.remove('running');void $('scanline').offsetWidth;$('scanline').classList.add('running');$('runState').textContent='正在识别区域、设备、文字与连线…';recognizeFile(file)}});
-$('analyzeBtn').addEventListener('click',()=>{if(!$('analyzeBtn').onclick){$('scanline').classList.remove('running');void $('scanline').offsetWidth;$('scanline').classList.add('running');setTimeout(()=>loadWaterPlant(),1200)}});
-$('showOriginal').addEventListener('click',()=>{const original=$('uploadedImage').classList.toggle('original');$('showOriginal').textContent=original?'返回设备拓扑':'原图对照'});
-$('loadSample').addEventListener('click',()=>loadWaterPlant());$('nodeForm').addEventListener('input',syncForm);$('nodeForm').addEventListener('change',syncForm);
+$('showOriginal').addEventListener('click',()=>{const original=$('uploadedImage').classList.toggle('original');$('showOriginal').textContent=original?'返回矢量拓扑':'显示原图'});
+$('nodeForm').addEventListener('input',syncForm);$('nodeForm').addEventListener('change',syncForm);
 $('addNode').addEventListener('click',()=>{const id=`asset-${Date.now()}`;nodes.push({id,name:'新增设备',type:'server',ip:'待分配',zone:'field',profile:'linux-host',x:870,y:735,confidence:1});selectedId=id;selectNode(id);toast('已添加设备，可拖动到目标位置')});
 $('deleteNode').addEventListener('click',()=>{if(!selectedId)return;const n=nodes.find(x=>x.id===selectedId);nodes=nodes.filter(x=>x.id!==selectedId);links=links.filter(l=>!l.includes(selectedId));selectedId=nodes[0]?.id||null;if(selectedId)selectNode(selectedId);else render();toast(`已删除 ${n?.name||'设备'} 及关联链路`)});
-$('linkNode').addEventListener('click',()=>{linkMode=!linkMode;linkSource=null;$('linkNode').textContent=linkMode?'取消连接':'连接设备';toast(linkMode?'依次点击两台设备建立链路':'已退出连接模式');render()});
+$('linkNode').addEventListener('click',()=>linkMode?cancelConnection():beginConnection());
+$('connectionSource').addEventListener('change',e=>{linkSource=e.target.value||null;render()});
+$('connectionTarget').addEventListener('change',e=>{linkTarget=e.target.value||null;render()});
+$('confirmConnection').addEventListener('click',confirmConnection);
+$('cancelConnection').addEventListener('click',cancelConnection);
+window.addEventListener('keydown',e=>{if(e.key==='Escape'&&linkMode){e.preventDefault();cancelConnection();toast('已取消连接')}});
 $('zoomIn').addEventListener('click',()=>{currentView={x:currentView.x+currentView.w*.1,y:currentView.y+currentView.h*.1,w:currentView.w*.8,h:currentView.h*.8};applyView()});
 $('zoomOut').addEventListener('click',()=>{currentView={x:Math.max(0,currentView.x-currentView.w*.125),y:Math.max(0,currentView.y-currentView.h*.125),w:Math.min(1800,currentView.w*1.25),h:Math.min(1050,currentView.h*1.25)};applyView()});
 $('fitView').addEventListener('click',()=>{currentView={x:0,y:0,w:1400,h:820};applyView()});
-$('generateBtn').addEventListener('click',generate);$('downloadBtn').addEventListener('click',()=>download(generated,$('orchestrator').value==='containerlab'?'zhongshan-water-plant.clab.yml':'zhongshan-water-plant.json'));
-$('exportJson').addEventListener('click',()=>download(JSON.stringify(topologyIR(),null,2),'zhongshan-water-plant-topology-ir.json','application/json'));
+$('generateBtn').addEventListener('click',generate);$('downloadBtn').addEventListener('click',()=>download(generated,$('orchestrator').value==='containerlab'?'toporangehub.clab.yml':'toporangehub.topology.json'));
+$('exportJson').addEventListener('click',()=>download(JSON.stringify(topologyIR(),null,2),'toporangehub.topology.json','application/json'));
 $('copyBtn').addEventListener('click',async()=>{await navigator.clipboard.writeText(generated);toast('配置已复制')});
-loadWaterPlant(false);
+function resetForUpload(){
+ linkMode=false;linkSource=null;linkTarget=null;dragging=null;dragMoved=false;
+ nodes=[];links=[];zoneDefs=[];selectedId=null;generated='';
+ $('nodeName').value='';$('nodeIp').value='';
+ $('uploadedImage').removeAttribute('src');$('uploadedImage').style.display='none';
+ $('exportJson').disabled=true;
+ $('sourceHint').textContent='上传 PNG、JPEG 或 WebP 拓扑图后开始分析';
+ $('runState').textContent='等待上传拓扑图';$('confidence').textContent='--';
+ $('findingText').textContent='上传图片后，GLM 将识别区域、设备和可见连接关系。';
+ render();
+}
+resetForUpload();

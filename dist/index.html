@@ -4,19 +4,34 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="从工厂拓扑图生成可运行隔离网络环境的演示工作台" />
-  <title>厂域镜像 · 拓扑生成靶场</title>
+  <title>TopoRangeHub · 拓扑生成靶场</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='13' fill='%230b1118'/%3E%3Cpath d='M14 42V22h12v8h12v-8h12v20H14Z' fill='none' stroke='%2335d6b2' stroke-width='4'/%3E%3Ccircle cx='20' cy='36' r='2.5' fill='%23ffb15a'/%3E%3Ccircle cx='44' cy='36' r='2.5' fill='%23ffb15a'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./upgrade.css" />
+  <link rel="stylesheet" href="./progress.css" />
+  <link rel="stylesheet" href="./projects.css" />
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="brand-mark">FT</span><div><strong>厂域镜像</strong><small>FactoryTwin Lab</small></div></div>
-    <div class="run-state"><span class="pulse"></span><span id="runState">钟山水厂拓扑已识别</span></div>
-    <button class="ghost" id="exportJson">导出拓扑模型</button>
+    <div class="brand"><span class="brand-mark">TRH</span><div><strong>TopoRangeHub</strong><small>拓扑识别与靶场生成平台</small></div></div>
+    <div class="run-state"><span class="pulse"></span><span id="runState">等待上传拓扑图</span></div>
+    <span id="saveState" hidden></span>
+    <button class="ghost" id="backToProjects" hidden>返回项目首页</button>
+    <button class="ghost" id="exportJson" disabled>导出拓扑模型</button>
   </header>
 
-  <main>
+  <section id="projectHome" class="project-home">
+    <h1>拓扑工程工作台</h1>
+    <p>新建拓扑，或继续编辑已保存的工程。</p>
+    <div class="home-actions">
+      <button class="button primary" id="homeUpload">上传拓扑图</button>
+      <button class="button secondary" id="homeImport">导入拓扑 JSON</button>
+    </div>
+    <h2>最近项目</h2>
+    <p class="project-storage-note">项目自动保存在当前浏览器中。跨设备使用请导出拓扑 JSON。</p>
+    <div id="recentProjects" class="recent-projects"></div>
+  </section>
+  <main id="projectEditor" hidden>
     <section class="workflow" aria-label="生成流程">
       <div class="workflow-step active"><b>01</b><span>导入拓扑图</span></div>
       <div class="workflow-line"></div>
@@ -28,28 +43,44 @@
     <section class="workspace">
       <div class="canvas-shell">
         <div class="panel-head">
-          <div><h1>可操作设备拓扑</h1><p id="sourceHint">钟山水厂网络拓扑图 · 识别结果已生成</p></div>
+          <div><h1>可操作设备拓扑</h1><p id="sourceHint">上传 PNG、JPEG 或 WebP 拓扑图后开始分析</p></div>
           <div class="toolbar">
             <label class="button secondary" for="fileInput">上传拓扑图</label>
             <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden />
-            <button class="button secondary" id="showOriginal">原图对照</button>
-            <button class="button secondary" id="loadSample">识别钟山水厂</button>
-            <button class="button primary" id="analyzeBtn">生成设备拓扑</button>
+            <label class="button secondary" for="jsonInput">导入拓扑 JSON</label>
+            <input id="jsonInput" type="file" accept=".json,application/json" hidden />
+            <button class="button secondary" id="showOriginal" disabled>显示原图</button>
+            <label class="reasoning-control" for="reasoningEffort">思考强度
+              <select id="reasoningEffort">
+                <option value="low">低 · low</option>
+                <option value="high">高 · high</option>
+                <option value="max">最高 · max</option>
+              </select>
+            </label>
+            <button class="button primary" id="analyzeBtn" disabled>分析并生成矢量拓扑</button>
+            <button type="button" class="button danger" id="stopAnalysisBtn" hidden>停止识别</button>
           </div>
         </div>
         <div class="canvas-wrap" id="canvasWrap">
-          <img id="uploadedImage" src="./assets/zhongshan-water-plant.jpg" alt="钟山水厂原始网络拓扑图" />
-          <svg id="topologyCanvas" viewBox="0 0 1400 820" role="img" aria-label="可拖拽编辑的钟山水厂网络拓扑"></svg>
+          <img id="uploadedImage" alt="用户上传的原始网络拓扑图" />
+          <svg id="topologyCanvas" viewBox="0 0 1400 820" role="img" aria-label="用户上传拓扑图生成的可编辑矢量拓扑"></svg>
           <div class="zoom-tools"><button id="zoomOut" aria-label="缩小">−</button><button id="fitView">适应画布</button><button id="zoomIn" aria-label="放大">＋</button></div>
-          <div class="canvas-legend">
-            <span><i class="dot enterprise"></i>企业区</span>
-            <span><i class="dot dmz"></i>集团边界</span>
-            <span><i class="dot security"></i>安防网</span>
-            <span><i class="dot control"></i>泵房区</span>
-            <span><i class="dot field"></i>生产工控网</span>
-          </div>
+          <div class="canvas-legend" id="zoneLegend" hidden aria-label="当前拓扑区域图例"></div>
           <div class="scanline" id="scanline"></div>
         </div>
+          <section class="analysis-log" id="analysisLog" hidden aria-live="polite">
+            <div class="analysis-log-header">
+              <strong>识别日志</strong>
+              <span id="analysisElapsed" class="analysis-elapsed">耗时 00:00</span>
+              <button type="button" id="toggleAnalysisLog" aria-expanded="true" aria-controls="analysisLogBody">收起 ▾</button>
+            </div>
+            <div id="analysisLogBody" class="analysis-log-body">
+            <strong>识别状态</strong>
+            <ol id="analysisEvents"></ol>
+            <strong>模型实时识别结果</strong>
+            <pre id="modelOutput">等待模型返回识别结果正文…</pre>
+            </div>
+          </section>
       </div>
 
       <aside class="inspector">
@@ -63,6 +94,17 @@
         </form>
         <div class="finding"><span>识别依据</span><p id="findingText">图标特征 + 邻近文本 + 连线位置</p></div>
         <div class="node-actions"><button class="button secondary" id="addNode">＋ 添加设备</button><button class="button secondary" id="linkNode">连接设备</button><button class="button danger" id="deleteNode">删除</button></div>
+        <section id="connectionPanel" class="connection-panel" hidden aria-label="手动连接设备">
+          <strong>创建设备连接</strong>
+          <label>起点设备<select id="connectionSource"></select></label>
+          <label>终点设备<select id="connectionTarget"></select></label>
+          <p id="connectionHint" role="status"></p>
+          <div class="node-actions">
+            <button type="button" class="button primary" id="confirmConnection" disabled>确认连接</button>
+            <button type="button" class="button secondary" id="cancelConnection">取消</button>
+          </div>
+          <small>可点击画布设备选择终点，也可使用下拉框。按 Esc 取消。</small>
+        </section>
         <div class="recognition-summary"><strong>识别摘要</strong><div id="typeSummary"></div></div>
       </aside>
     </section>
@@ -90,5 +132,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="./waterplant.js"></script>
+  <script src="./topology-import.js"></script>
+  <script src="./project-store.js"></script>
+  <script src="./service.js"></script>
 </body>
 </html>
