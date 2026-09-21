@@ -113,13 +113,14 @@
       <div class="deploy-copy">
         <span class="eyebrow">DEPLOYMENT BLUEPRINT</span>
         <h2>生成隔离的真实网络环境</h2>
-        <p>将确认后的节点和链路编译为 Containerlab 配置，在 Linux 网络命名空间之间创建真实 veth 链路。</p>
+        <p>审核确认后，自动在 Docker 的隔离运行时中创建对应节点和链路；默认不映射宿主机端口、不连接生产网络或互联网。</p>
         <div class="stats"><div><strong id="nodeCount">0</strong><span>设备</span></div><div><strong id="linkCount">0</strong><span>链路</span></div><div><strong id="zoneCount">5</strong><span>安全区域</span></div><div><strong id="issueCount">0</strong><span>待确认</span></div></div>
       </div>
       <div class="deploy-actions">
-        <label>目标编排器<select id="orchestrator"><option value="containerlab">Containerlab + 设备模板</option><option value="json">通用拓扑 JSON</option></select></label>
-        <button class="button primary large" id="generateBtn">生成部署配置</button>
-        <button class="button secondary large" id="downloadBtn" disabled>下载部署文件</button>
+        <label>部署目标<select id="orchestrator"><option value="docker-range">Docker 隔离虚拟靶场</option><option value="json">导出通用拓扑 JSON</option></select></label>
+        <button class="button primary large" id="generateBtn">生成部署预览</button>
+        <button class="button secondary large" id="deployRangeBtn" disabled>启动隔离靶场</button>
+        <button class="button secondary large" id="downloadBtn" disabled>下载拓扑文件</button>
       </div>
     </section>
 

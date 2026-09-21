@@ -6,11 +6,50 @@ services:
     environment:
       ZHIPUAI_API_KEY: ${ZHIPUAI_API_KEY:?Set ZHIPUAI_API_KEY in the shell or .env file}
       ZHIPU_VISION_MODEL: ${ZHIPU_VISION_MODEL:-glm-5.3-flash}
+      RANGE_ENGINE_URL: http://range-engine:8090
     volumes:
       - toporangehub-data:/data/jobs
     restart: unless-stopped
+    networks:
+      - app-net
+
+  # Dedicated nested daemon for disposable range nodes. The host Docker socket
+  # is deliberately never mounted into the application or range engine.
+  range-docker:
+    image: docker:27-dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command: ["--host=tcp://0.0.0.0:2375", "--tls=false"]
+    volumes:
+      - range-docker-data:/var/lib/docker
+    restart: unless-stopped
+    networks:
+      - range-control
+      - range-egress
+
+  range-engine:
+    build: ./range-engine
+    environment:
+      RANGE_DOCKER_HOST: http://range-docker:2375
+    depends_on:
+      - range-docker
+    restart: unless-stopped
+    networks:
+      - app-net
+      - range-control
+
+networks:
+  app-net:
+  # No host ports; only range-engine can access the inner Docker API here.
+  range-control:
+    internal: true
+  # The daemon alone uses this network to obtain base images.
+  range-egress:
 
 volumes:
   toporangehub-data:
     # Keep the old physical volume so the branding change preserves job data.
     name: ${TOPORANGEHUB_DATA_VOLUME:-${COMPOSE_PROJECT_NAME:-automated_industrial_control_system_security_exercise_range}_factorytwin-data}
+
+  range-docker-data:

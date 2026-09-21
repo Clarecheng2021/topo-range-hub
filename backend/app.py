@@ -10,6 +10,8 @@ import re
 import threading
 import time
 import uuid
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,6 +33,27 @@ logger = logging.getLogger("toporangehub")
 STATUS_LOCK = threading.Lock()
 JOB_LOCK = threading.Lock()
 JOB_PROCESSES: dict[str, multiprocessing.Process] = {}
+RANGE_ENGINE_URL = os.environ.get("RANGE_ENGINE_URL", "").rstrip("/")
+
+
+def range_engine_request(method: str, path: str, payload: dict | None = None) -> dict:
+    """Call the internal range runtime without exposing its Docker daemon."""
+    if not RANGE_ENGINE_URL:
+        raise HTTPException(status_code=503, detail="虚拟靶场运行时未配置")
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(f"{RANGE_ENGINE_URL}{path}", data=body, method=method, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.loads(response.read() or b"{}")
+    except urllib.error.HTTPError as error:
+        try:
+            message = json.loads(error.read() or b"{}").get("detail", "虚拟靶场请求失败")
+        except (json.JSONDecodeError, AttributeError):
+            message = "虚拟靶场请求失败"
+        raise HTTPException(status_code=error.code, detail=message) from error
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        logger.warning("Range engine unavailable: %s", error)
+        raise HTTPException(status_code=503, detail="虚拟靶场运行时暂不可用，请稍后重试") from error
 
 
 def job_path(job_id: str) -> Path:
@@ -158,25 +181,6 @@ def cancel_job(job_id: str) -> dict[str, str]:
     return {"status": "cancelled"}
 
 
-def containerlab_yaml(topology: dict) -> str:
-    ports: dict[str, int] = {}
-    lines = ["name: toporangehub-range", "", "topology:", "  nodes:"]
-    for node in topology["nodes"]:
-        safe_id = re.sub(r"[^a-zA-Z0-9_-]", "-", node["id"]).lower()
-        lines.extend([f"    {safe_id}:", "      kind: linux", "      image: alpine:3.20", "      cmd: sleep infinity", "      labels:",
-                      f"        factory.name: {json.dumps(node['name'], ensure_ascii=False)}",
-                      f"        factory.type: {node['type']}", f"        factory.zone: {node['zone']}"])
-    lines.extend(["  links:"])
-    for link in topology["links"]:
-        source, target = link["source"], link["target"]
-        ports[source] = ports.get(source, 0) + 1
-        ports[target] = ports.get(target, 0) + 1
-        a = re.sub(r"[^a-zA-Z0-9_-]", "-", source).lower()
-        b = re.sub(r"[^a-zA-Z0-9_-]", "-", target).lower()
-        lines.append(f'    - endpoints: ["{a}:eth{ports[source]}", "{b}:eth{ports[target]}"]')
-    return "\n".join(lines) + "\n"
-
-
 @app.on_event("startup")
 def recover_interrupted_jobs() -> None:
     # In-process tasks cannot survive a container restart. Preserve their image
@@ -195,6 +199,25 @@ def recover_interrupted_jobs() -> None:
 def health() -> dict[str, str]:
     return {"status": "ok", "model": os.environ.get("ZHIPU_VISION_MODEL", "glm-5.3-flash")}
 
+
+@app.get("/api/ranges/health")
+def range_health() -> dict:
+    return range_engine_request("GET", "/health")
+
+
+@app.get("/api/ranges")
+def list_ranges() -> dict:
+    return range_engine_request("GET", "/deployments")
+
+
+@app.delete("/api/ranges/{range_id}")
+def destroy_range(range_id: str) -> dict:
+    return range_engine_request("DELETE", f"/deployments/{range_id}")
+
+@app.post("/api/ranges/deploy", status_code=201)
+def deploy_range(topology: dict) -> dict:
+    # The engine independently rejects unsafe topology and missing approval.
+    return range_engine_request("POST", "/deployments", topology)
 
 @app.post("/api/analyze", status_code=202)
 async def create_analysis(background_tasks: BackgroundTasks, image: UploadFile = File(...), scope: str = Form("生产工控网"), reasoning_effort: str = Form("low")) -> JSONResponse:
@@ -254,17 +277,6 @@ def get_output(job_id: str) -> PlainTextResponse:
         raise HTTPException(status_code=404, detail="Job not found")
     output = directory / "output.txt"
     return PlainTextResponse(output.read_text(encoding="utf-8") if output.is_file() else "", headers={"Cache-Control": "no-store"})
-
-
-@app.get("/api/jobs/{job_id}/containerlab")
-def export_containerlab(job_id: str) -> PlainTextResponse:
-    output = job_path(job_id) / "topology.json"
-    if not output.is_file():
-        raise HTTPException(status_code=404, detail="Topology not found")
-    topology = json.loads(output.read_text(encoding="utf-8"))
-    if topology.get("review", {}).get("status") == "rejected":
-        raise HTTPException(status_code=409, detail="Rejected topology cannot be exported")
-    return PlainTextResponse(containerlab_yaml(topology), media_type="text/yaml")
 
 
 @app.get("/")

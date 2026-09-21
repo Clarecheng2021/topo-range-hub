@@ -3,7 +3,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const source = fs.readFileSync(path.join(__dirname, '../dist/waterplant.js'), 'utf8');
-const functions = source.slice(source.indexOf('function connectionIssue()'), source.indexOf('function loadWaterPlant('));
+const functions = source.slice(source.indexOf('function connectionIssue()'), source.indexOf('function toast('));
 const elements = {};
 const context = {
   nodes: [{ id: 'a', name: 'PLC' }, { id: 'b', name: 'HMI' }], links: [], selectedId: 'a',

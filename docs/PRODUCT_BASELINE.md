@@ -22,7 +22,7 @@
 6. 多模态模型识别全局语义、Purdue 层级、IT/OT/DMZ 区域，并校验 OCR、图标和链路候选之间的冲突。
 7. 图重建服务生成统一 Graph JSON，执行孤立节点、重复节点、跨区链路、接口容量和协议合理性检查。
 8. 可视化编辑器显示原图叠加、边界框、识别依据和置信度，允许增删、拖拽、改类型、改属性和重连。
-9. 场景编译器把抽象设备映射为运行模板，并生成 Containerlab、Docker/Compose、虚机或物理资源计划。
+9. 场景编译器把抽象设备映射为运行模板，并生成 Docker 隔离靶场、虚机或物理资源计划。
 10. 用户确认部署计划后，在隔离执行节点创建环境；执行健康检查、连通性测试和服务探测，再回传可访问入口。
 
 ## 3. 为什么采用混合识别
@@ -58,7 +58,7 @@ Web Editor
      -> Range Engine
         - template catalog
         - resource planner
-        - containerlab compiler
+        - Docker isolated runtime
         - VM / physical adapters
         - deploy / inspect / destroy
      -> Validation Service
@@ -115,8 +115,8 @@ Web Editor
 
 ### V0.2（当前 Demo）
 
-- 钟山水厂固定模板可生成 41 个设备和 40 条链路。
-- 支持拖拽、增删、重连、属性校正以及 JSON/Containerlab 导出。
+- 支持上传图片或导入拓扑 JSON，生成并人工审核通用候选拓扑。
+- 支持拖拽、增删、重连、属性校正、JSON 导出以及审核后启动 Docker 隔离靶场。
 - 限制：不是通用图片识别，运行模板仍以网络占位节点为主。
 
 ### V0.3（下一里程碑：通用解析）
@@ -128,7 +128,7 @@ Web Editor
 
 ### V0.4（可运行网络）
 
-- 场景编译器生成合法 Containerlab 文件并先执行 dry-run。
+- 场景编译器生成 Docker 隔离靶场计划并先执行 dry-run。
 - 支持 Linux 主机、二层交换机、FRR 路由、防火墙、HMI、PLC 和传感器模拟器。
 - 部署后自动验证节点状态、二层/三层连通性，失败项定位到具体节点或链路。
 
@@ -141,7 +141,7 @@ Web Editor
 ### V1.0（企业化交付）
 
 - 多租户项目、权限、审计、模板和镜像治理。
-- Containerlab/Docker、虚机、GNS3/EVE-NG 及受控物理设备的混合编排。
+- Docker、虚机、GNS3/EVE-NG 及受控物理设备的混合编排。
 - 识别、人工修正、编译、审批、部署、验证和销毁的全生命周期可追溯。
 
 ## 9. 下一步实施顺序

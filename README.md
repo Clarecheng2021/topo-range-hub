@@ -6,23 +6,29 @@ TopoRangeHub 从用户上传的工控拓扑图生成可编辑矢量拓扑和可�
 2. 根据实际图片识别设备、连线和可见区域划分。
 3. 生成可点击、拖拽、增删和重新连接的设备拓扑。
 4. 在右侧校正设备类型、IP、安全区域和运行模板。
-5. 导出统一拓扑 JSON 或包含全部当前设备及链路的 Containerlab YAML。
-6. 在隔离的 Linux/Docker 测试主机上部署真实网络命名空间和 veth 链路。
+5. 导出统一拓扑 JSON，或在人工确认后启动对应的 Docker 隔离虚拟靶场。
+6. 在 Docker 运行时中创建隔离的虚拟节点和链路，作为网络安全测试环境。
 
 ## 本地查看
 
 直接打开 `dist/index.html`，或在 `dist` 目录启动任意静态文件服务器。
 
-## 部署示例环境
+## Docker 一键运行与隔离靶场
 
-需要 Linux、Docker 和 Containerlab。确认测试主机未桥接生产网络后，在 PowerShell 中运行：
+仅需 Docker Desktop；不需要安装 Containerlab、WSL 或 Claude Code。创建 `.env` 后启动：
 
-```powershell
-.\scripts\deploy-demo.ps1
+```dotenv
+ZHIPUAI_API_KEY=替换为你的智谱开放平台API密钥
+ZHIPU_VISION_MODEL=glm-5.3-flash
 ```
 
-当前网页使用服务端 GLM 接口分析用户上传的图片；水厂图片仅作为测试样例，不会默认加载。打开首页可新建或选择最近项目，项目页刷新会恢复保存的审核修改。
+```powershell
+docker compose up --build -d
+```
 
+打开 `http://localhost:8080`：上传图片 → GLM 识别 → 人工校正 → “生成部署预览” → “启动隔离靶场”。
+
+运行时由 `range-engine` 控制一个内部 Docker 守护进程，网页和主服务都不会挂载宿主机 Docker Socket。每个生成节点以 `NetworkMode=none` 启动，仅按审核后的拓扑连接到内部链路网络；默认没有宿主机端口映射、生产网桥和互联网出口。`range-docker` 使用 Docker-in-Docker 的 `privileged` 模式，因此只应在受信任的本地实验机或专用靶场主机运行。
 ## 本地解析流水线（实验）
 
 对图片 `test1.png` 的本地验证流程如下。所有输出均为候选结果，必须人工复核：
@@ -58,7 +64,7 @@ PNG/JPG/PDF
   -> 统一拓扑 Graph JSON
   -> 人工校正与置信度复核
   -> 场景编译
-  -> Containerlab/Docker/VM/物理设备适配器
+  -> Docker 隔离靶场 / VM / 物理设备适配器
   -> 部署、健康检查与结果回传
 ```
 
@@ -68,7 +74,7 @@ PNG/JPG/PDF
 
 ## Docker 最终产品（GLM 直连）
 
-容器化版本不依赖 Claude Code、MCP、PP-OCR 或本机 Python。浏览器上传 PNG/JPEG/WebP 后，后端直接调用智谱开放平台的视觉模型，标准化为统一拓扑 JSON，网页加载该候选图并允许审核、编辑和导出 Containerlab YAML。
+容器化版本不依赖 Claude Code、MCP、PP-OCR 或本机 Python。浏览器上传 PNG/JPEG/WebP 后，后端直接调用智谱开放平台的视觉模型，标准化为统一拓扑 JSON；审核后可启动对应的 Docker 隔离虚拟靶场。
 
 1. 在智谱开放平台创建**标准 API Key**（不要使用 GLM Coding Plan 的工具套餐 Key）。
 2. 安装 Docker Desktop 并启动 Docker Engine。
@@ -87,7 +93,7 @@ docker compose up --build -d
 
 5. 打开 `http://localhost:8080`，上传拓扑图，点击“生成设备拓扑”。
 
-结果文件保存在 Docker 逻辑卷 `toporangehub-data` 中。为兼容升级，默认仍映射原有物理数据卷，可通过 `TOPORANGEHUB_DATA_VOLUME` 指定已有卷名。服务只生成候选拓扑和 Containerlab YAML；它不会连接 Docker Socket、生产网卡或自动部署任何环境。审核完成后，再将导出的 YAML 放到隔离 Linux 靶场主机中执行。
+结果文件保存在 Docker 逻辑卷 `toporangehub-data` 中。为兼容升级，默认仍映射原有物理数据卷，可通过 `TOPORANGEHUB_DATA_VOLUME` 指定已有卷名。服务会在用户点击“启动隔离靶场”并确认后，向内部受控运行时提交审核拓扑；它不会连接宿主机 Docker Socket、生产网卡或互联网。
 
 ### GLM 标准化器（已有候选结果）
 
