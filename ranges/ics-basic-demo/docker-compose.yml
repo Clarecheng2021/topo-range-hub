@@ -8,6 +8,7 @@ services:
     volumes:
       - ./hmi:/usr/share/nginx/html:ro
     networks:
+      - hmi-edge
       - range-net
     restart: unless-stopped
 
@@ -26,3 +27,5 @@ services:
 networks:
   range-net:
     internal: true
+  hmi-edge:
+    driver: bridge
