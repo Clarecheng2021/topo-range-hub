@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>水处理训练场 · HMI</title>
+  <style>
+    :root { font-family:system-ui,sans-serif; color:#e8f4f6; background:#07131a; }
+    body { max-width:1000px; margin:0 auto; padding:28px; }
+    header,section { background:#0c222d; border:1px solid #1d4d59; border-radius:14px; padding:22px; margin-bottom:18px; }
+    h1 { margin:0 0 8px; } small { color:#9bb6bd; } .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; }
+    .card { background:#0a1922; border-radius:10px; padding:16px; } .value { font-size:2rem; color:#48dbc1; margin-top:8px; }
+    .meter { height:20px; background:#162d37; border-radius:10px; overflow:hidden; margin:12px 0; } .meter>i { display:block; height:100%; background:#42d4ba; transition:width .4s; }
+    button { border:0; border-radius:8px; padding:11px 15px; font-weight:700; cursor:pointer; background:#31cdb4; color:#04201c; margin:4px; }
+    button.stop { background:#ffb55b; } button.reset { background:#d47878; color:#fff; } button:disabled { opacity:.45; cursor:not-allowed; }
+    #alarm { color:#8db0b6; font-weight:700; } #alarm.active { color:#ff8b72; } #events { padding-left:20px; max-height:220px; overflow:auto; color:#c7d8dc; }
+  </style>
+</head>
+<body>
+  <header><h1>水处理训练场 <small>· 模拟 HMI</small></h1><p>训练模式：所有设备和数据均为本地模拟，不连接生产网络或真实 PLC。</p></header>
+  <section class="grid">
+    <div class="card"><small>储罐液位</small><div class="value" id="level">--</div><div class="meter"><i id="bar"></i></div><small>运行目标：40%–80%</small></div>
+    <div class="card"><small>进水泵 P-101</small><div class="value" id="pump">--</div><p id="alarm">正在读取模拟器状态…</p></div>
+    <div class="card"><small>操作面板</small><p><button onclick="command('start_pump')">启动泵</button><button class="stop" onclick="command('stop_pump')">停止泵</button></p><p><button onclick="command('acknowledge_alarm')">确认告警</button><button class="reset" onclick="command('reset_scenario')">复位场景</button></p></div>
+  </section>
+  <section><h2>事件记录</h2><ol id="events"></ol></section>
+  <script>
+    const $=id=>document.getElementById(id);
+    const stamp=seconds=>new Date(seconds*1000).toLocaleTimeString();
+    function render(s){
+      $('level').textContent=s.tank_level_pct+'%'; $('bar').style.width=s.tank_level_pct+'%';
+      $('pump').textContent=s.pump_running?'运行中':'已停止';
+      const a=$('alarm'); a.textContent=s.alarm?(s.acknowledged?'已确认：':'告警：')+s.alarm:'无活动告警'; a.className=s.alarm?'active':'';
+      $('events').innerHTML=(s.events||[]).slice().reverse().map(e=>`<li>${stamp(e.at)} · ${e.message}</li>`).join('');
+    }
+    async function refresh(){ try { render(await (await fetch('/api/v1/status',{cache:'no-store'})).json()); } catch { $('alarm').textContent='模拟器连接失败'; $('alarm').className='active'; } }
+    async function command(action){ await fetch('/api/v1/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})}); refresh(); }
+    refresh(); setInterval(refresh,1000);
+  </script>
+</body>
+</html>
