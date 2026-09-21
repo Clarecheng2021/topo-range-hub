@@ -3,3 +3,7 @@ __pycache__/
 artifacts/
 *.pyc
 .env
+.claude/
+output/
+release-test/
+TopoRangeHub-test-*.zip

@@ -1,0 +1,28 @@
+name: toporangehub-ics-basic-demo
+
+services:
+  hmi:
+    image: nginx:1.27-alpine
+    ports:
+      - "127.0.0.1:18080:80"
+    volumes:
+      - ./hmi:/usr/share/nginx/html:ro
+    networks:
+      - range-net
+    restart: unless-stopped
+
+  plc-simulator:
+    build:
+      context: ./plc-simulator
+    expose:
+      - "8081"
+    environment:
+      PLC_NAME: PLC-01
+      PLC_AREA: Pretreatment
+    networks:
+      - range-net
+    restart: unless-stopped
+
+networks:
+  range-net:
+    internal: true
